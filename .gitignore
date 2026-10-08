@@ -1,0 +1,35 @@
+# CMake build output
+/build/
+/build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+Makefile
+
+# Generated configuration and staging output
+/generated/
+/stage/
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Test and coverage output
+Testing/
+coverage/
+*.gcda
+*.gcno
+*.gcov
+
+# Local IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+
+# The configuration a build resolves, written beside the sources that use it.
+/.config
+include/generated/

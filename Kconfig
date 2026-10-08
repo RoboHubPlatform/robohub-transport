@@ -1,0 +1,20 @@
+# robohub-transport Kconfig
+
+menu "RoboHub transport"
+
+config RH_TRANSPORT
+    bool "Framed byte-stream transport"
+    default n
+    help
+      COBS framing with a Fletcher-16 integrity check over a physical byte
+      stream. A program that talks to a UART, a USB CDC pipe, an RS-485 bus or a
+      socket selects it.
+
+config RH_TRANSPORT_MAX_FRAME_SIZE
+    int "Largest frame (bytes)"
+    default 256
+    help
+      The largest COBS-encoded frame accepted or produced. The receive buffer is
+      part of the transport instance, so this is what one channel costs.
+
+endmenu
