@@ -83,3 +83,11 @@ metadata:
     - crc
   stability: experimental
   visibility: public
+
+docs:
+  title: robohub-transport
+  section: modules
+  order: "10"
+  index: docs/index.md
+  sources:
+    - docs/index.md
