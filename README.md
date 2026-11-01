@@ -55,6 +55,23 @@ response can share a `tx_id`.
 that is dropping everything says so, which on a board with no debugger is the
 difference between a wire that is wrong and a program that is.
 
+## Deployment transports
+
+The frames are the same over every byte stream. The module also declares the
+transports it can carry them over, in `capabilities.transports`:
+
+```yaml
+capabilities:
+  transports: "uart console usb wifi ethernet socket rs485 spi i2c"
+```
+
+A board declares what it has in `capabilities.links` and `capabilities.buses`.
+A deployment planner intersects the module's list with both ends of a
+connection, so it offers only transports both boards can serve. `console` is a
+host's byte stream and is offered only when the parent is a host. Adding a
+transport to the module, or a link to a board, makes it selectable without any
+planner change.
+
 ## Building
 
 It is a native module: `rho build` adds it as a dependency, and it builds on its
@@ -63,3 +80,7 @@ own with CMake for the host tests.
 ## License
 
 MIT. See `LICENSE`.
+
+## Release history
+
+[CHANGELOG.md](CHANGELOG.md) — the changes in 0.2.0 and earlier releases.
