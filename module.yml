@@ -12,7 +12,7 @@
 module:
   name: robohub-transport
   type: runtime
-  version: 0.1.0
+  version: 0.2.0
   description: >
     COBS framing with a Fletcher-16 integrity check and a byte-at-a-time parser,
     over any physical byte stream, publishing validated frames on the event bus.
@@ -69,6 +69,12 @@ testing:
   host_tests:
     enabled: true
     target_constraint: "native"
+
+# The physical transports this runtime can carry its frames over. A deployment
+# planner intersects this list with what a board actually has, so an option
+# appears only when both ends can serve it.
+capabilities:
+  transports: "uart console usb wifi ethernet socket rs485 spi i2c"
 
 package:
   kind: library
