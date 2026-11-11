@@ -38,6 +38,7 @@ extern "C" {
 #include "types.h"
 #include "error.h"
 #include "robohub/core/events.h"
+#include "robohub/secure.h"
 
 /* The resolved configuration, when a build wrote one; a host test has none. */
 #if defined(__has_include)
@@ -105,6 +106,14 @@ typedef struct RoboHubTransport {
     rh_u32  tx_packets;
     /** Frames dropped for being too long or malformed. */
     rh_u32  dropped;
+    /**
+     * The link's authentication, when it has any (robohub_transport_secure).
+     * With it, every frame sent is sealed, every frame received must open, and
+     * a frame that does not is dropped.
+     */
+    RoboHubSecure* secure;
+    /** When the last HELLO was sent, so an unanswered one is sent again. */
+    rh_u32  hello_ms;
 } RoboHubTransport;
 
 /* -------------------------------------------------------------------------- */
@@ -114,6 +123,13 @@ typedef struct RoboHubTransport {
 /** Bind a transport to a link. The link must outlive the transport. */
 RoboHubError robohub_transport_init(RoboHubTransport* transport,
                                     const RoboHubTransportPhy* phy);
+
+/**
+ * @brief Authenticate the link: from now on frames are sealed and opened with
+ * `secure`, and a plain frame received is dropped. The first send starts the
+ * session handshake. `secure` must outlive the transport.
+ */
+RoboHubError robohub_transport_secure(RoboHubTransport* transport, RoboHubSecure* secure);
 
 /**
  * @brief Offer one byte from the link to the parser.
@@ -131,7 +147,10 @@ void robohub_transport_feed(RoboHubTransport* transport, const rh_u8* data, rh_s
  * @brief Frame a payload and write it to the link.
  *
  * Returns `ROBOHUB_ERR_INVALID_ARG` when the payload cannot fit a frame. The
- * caller owns `payload`; it is read here and not kept.
+ * caller owns `payload`; it is read here and not kept. On an authenticated link
+ * with no session yet, the frame is not sent: the handshake is started (or its
+ * HELLO repeated) and `ROBOHUB_ERR_STATE` is returned, so a reading is never sent
+ * unauthenticated.
  */
 RoboHubError robohub_transport_send(RoboHubTransport* transport,
                                     robohub_event_id msg_id,

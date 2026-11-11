@@ -165,9 +165,30 @@ static void transport_deliver(RoboHubTransport* transport)
         return;
     }
 
+    const rh_u8* payload = &frame[RH_TRANSPORT_HEADER_SIZE];
+    rh_size length = payload_len;
+    if (transport->secure != 0) {
+        /* An authenticated link accepts the gateway's answer to its hello and
+         * frames that open under the session, and nothing else. */
+        if (msg_id == RH_SECURE_MSG_SESSION) {
+            (void)robohub_secure_accept(transport->secure, payload, length);
+            return;
+        }
+        const rh_u8* inner = 0;
+        rh_size inner_length = 0u;
+        if (robohub_secure_open(transport->secure, msg_id, tx_id, payload, length,
+                                &inner, &inner_length) != ROBOHUB_OK) {
+            transport->dropped++;
+            return;
+        }
+        msg_id = (rh_u16)(msg_id & (rh_u16)~RH_SECURE_FLAG);
+        payload = inner;
+        length = inner_length;
+    }
+
     transport->rx_packets++;
     (void)robohub_core_event_publish_with_tx((robohub_event_id)msg_id, tx_id,
-                                             &frame[RH_TRANSPORT_HEADER_SIZE], payload_len);
+                                             payload, (rh_u16)length);
 }
 
 void robohub_transport_feed_byte(RoboHubTransport* transport, rh_u8 byte)
@@ -201,6 +222,23 @@ void robohub_transport_feed(RoboHubTransport* transport, const rh_u8* data, rh_s
     }
 }
 
+RoboHubError robohub_transport_secure(RoboHubTransport* transport, RoboHubSecure* secure)
+{
+    if (transport == 0 || secure == 0) {
+        return ROBOHUB_ERR_INVALID_ARG;
+    }
+    transport->secure = secure;
+    return ROBOHUB_OK;
+}
+
+/* transport_write frames one payload as it is and writes it to the link. */
+static RoboHubError transport_write(RoboHubTransport* transport, rh_u16 msg_id, rh_u16 tx_id,
+                                    const void* payload, rh_u16 payload_len);
+
+/* A HELLO is repeated every two seconds until it is answered: a hello lost on a
+ * noisy line must not leave the board waiting for an answer that cannot come. */
+#define RH_TRANSPORT_HELLO_RETRY_MS 2000u
+
 RoboHubError robohub_transport_send(RoboHubTransport* transport,
                                     robohub_event_id msg_id,
                                     rh_u16 tx_id,
@@ -210,6 +248,38 @@ RoboHubError robohub_transport_send(RoboHubTransport* transport,
     if (transport == 0 || transport->phy.write == 0) {
         return ROBOHUB_ERR_STATE;
     }
+    RoboHubSecure* secure = transport->secure;
+    if (secure == 0) {
+        return transport_write(transport, (rh_u16)msg_id, tx_id, payload, payload_len);
+    }
+    if (!robohub_secure_ready(secure)) {
+        rh_u32 now = secure->now_ms();
+        if (secure->state != RH_SECURE_HELLO_SENT ||
+            (rh_u32)(now - transport->hello_ms) >= RH_TRANSPORT_HELLO_RETRY_MS) {
+            rh_u8 hello[RH_SECURE_HELLO_SIZE];
+            if (robohub_secure_hello(secure, hello) == ROBOHUB_OK) {
+                transport->hello_ms = now;
+                (void)transport_write(transport, RH_SECURE_MSG_HELLO, 0u, hello, RH_SECURE_HELLO_SIZE);
+            }
+        }
+        return ROBOHUB_ERR_STATE;
+    }
+    rh_u8 sealed[RH_TRANSPORT_MAX_FRAME_SIZE];
+    rh_size sealed_length = 0u;
+    RoboHubError err = robohub_secure_seal(secure, (rh_u16)msg_id, tx_id, (const rh_u8*)payload,
+                                           payload_len, sealed,
+                                           RH_TRANSPORT_MAX_FRAME_SIZE - RH_TRANSPORT_HEADER_SIZE - RH_TRANSPORT_CRC_SIZE,
+                                           &sealed_length);
+    if (err != ROBOHUB_OK) {
+        return err;
+    }
+    return transport_write(transport, (rh_u16)(msg_id | RH_SECURE_FLAG), tx_id, sealed,
+                           (rh_u16)sealed_length);
+}
+
+static RoboHubError transport_write(RoboHubTransport* transport, rh_u16 msg_id, rh_u16 tx_id,
+                                    const void* payload, rh_u16 payload_len)
+{
     if ((rh_size)RH_TRANSPORT_HEADER_SIZE + payload_len + RH_TRANSPORT_CRC_SIZE
         > RH_TRANSPORT_MAX_FRAME_SIZE) {
         return ROBOHUB_ERR_INVALID_ARG;

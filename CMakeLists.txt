@@ -56,7 +56,7 @@ endif()
 # ---------------------------------------------------------------------------
 # Library target
 # ---------------------------------------------------------------------------
-add_library(robohub-transport STATIC src/transport.c)
+add_library(robohub-transport STATIC src/transport.c src/secure.c)
 
 target_include_directories(robohub-transport PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -80,6 +80,9 @@ if(PROJECT_IS_TOP_LEVEL AND RHO_BUILD_HOST_TESTS AND NOT RHO_TARGET_IS_BAREMETAL
   target_link_libraries(robohub-transport-test PRIVATE robohub-transport)
   target_include_directories(robohub-transport-test PRIVATE "${ROBOHUB_CORE_DIR}/src")
   add_test(NAME robohub-transport-test COMMAND robohub-transport-test)
+  add_executable(robohub-transport-secure-test tests/test_secure.c)
+  target_link_libraries(robohub-transport-secure-test PRIVATE robohub-transport)
+  add_test(NAME robohub-transport-secure-test COMMAND robohub-transport-secure-test)
 endif()
 
 # ---------------------------------------------------------------------------

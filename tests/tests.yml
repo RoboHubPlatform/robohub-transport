@@ -1,0 +1,8 @@
+# robohub-transport's host tests: the framing, and authenticated frames. The
+# ctest kind configures, builds and runs them, so `rho test` is how they run.
+name: robohub-transport
+suites:
+  - name: unit
+    kind: ctest
+    tags: [unit, host]
+    ctest: {}

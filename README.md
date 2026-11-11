@@ -84,3 +84,14 @@ MIT. See `LICENSE`.
 ## Release history
 
 [CHANGELOG.md](CHANGELOG.md) — the changes in 0.2.0 and earlier releases.
+
+## Authenticated frames
+
+`robohub/secure.h` authenticates a link: `robohub_transport_secure(transport,
+&secure)` and from then on every frame sent is sealed and every frame received
+must open under the session, or it is dropped. The first send says hello to the
+gateway and returns `ROBOHUB_ERR_STATE` until the session is up, so nothing is
+sent unauthenticated. HMAC-SHA256, truncated to 64 bits, with a counter per
+direction and a session lifetime; no encryption, no allocation. The board's id and
+device key come from its firmware build, and its nonces from
+`robohub_platform_nonce`, which every platform provides.
