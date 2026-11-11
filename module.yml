@@ -11,7 +11,9 @@
 
 module:
   name: robohub-transport
-  id: robohub-transport
+  id: robohub.runtime.transport
+  previous_ids:
+    - robohub-transport
   type: runtime
   version: 0.2.1
   description: >
