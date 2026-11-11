@@ -34,12 +34,12 @@ build:
 depends:
   - name: robohub-common
     type: c
-    path: ${RHO_WORKSPACE}/robohub-common
+    path: ${ROBOHUB_WORKSPACE}/robohub-common
     git: https://github.com/RoboHubPlatform/robohub-common
     branch: main
   - name: robohub-core
     type: c
-    path: ${RHO_WORKSPACE}/robohub-core
+    path: ${ROBOHUB_WORKSPACE}/robohub-core
     git: https://github.com/RoboHubPlatform/robohub-core
     branch: main
 
