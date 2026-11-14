@@ -1,21 +1,92 @@
 # Transport
 
-RoboHub module.
+Framing for a byte stream. A UART, a USB CDC pipe, an RS-485 bus and a socket all
+deliver a message as bytes with no idea where it ends; this turns that stream
+back into messages and hands each one to the runtime's event bus.
 
-**Version:** 0.2.0
+```
+robohub-core        event bus / rpc dispatch
+      ▲  validated frame
+robohub-transport   COBS · Fletcher-16 · parser · counters
+      ▲  raw bytes
+physical driver     Pico USB CDC / ESP32 UART / STM32 SPI / socket
+```
+
+## A frame
+
+```
+msg_id      u16   which event the payload is
+tx_id       u16   0 for telemetry, shared by a call and its answer
+payload_len u16   N
+payload     [N]   the packed bytes a schema generated
+crc16       u16   Fletcher-16 over the header and the payload
+```
+
+Little-endian, then COBS-encoded, then terminated by `0x00`. COBS guarantees that
+byte appears nowhere else, so the parser finds a boundary the instant it sees
+one — even joining a stream half way through a frame, or after a burst of noise.
+A protocol that resynchronises on a timeout is a protocol that stalls when the
+timer is wrong.
+
+## No allocation
+
+The receive buffer is in the instance and a complete frame is decoded onto the
+stack. `robohub_transport_feed_byte` never blocks and never allocates, so it is
+safe to call from the interrupt or DMA callback that delivered the byte.
+
+```c
+RoboHubTransport link;
+robohub_transport_init(&link, &(RoboHubTransportPhy){ .write = uart_write, .context = &uart });
+
+/* In the UART interrupt. */
+robohub_transport_feed_byte(&link, received_byte);
+
+/* To send. */
+robohub_transport_send(&link, EVENT_TEMP_READING, 0, &reading, sizeof(reading));
+```
+
+A frame that checks out is published with `robohub_core_event_publish_with_tx`,
+so a handler is reached by the event its `msg_id` names, and a request and its
+response can share a `tx_id`.
+
+## Counters
+
+`crc_errors`, `rx_packets`, `tx_packets` and `dropped` are on the instance. A link
+that is dropping everything says so, which on a board with no debugger is the
+difference between a wire that is wrong and a program that is.
 
 ## Deployment transports
 
-`capabilities.transports` is the vocabulary a deployment planner uses:
+The frames are the same over every byte stream. The module also declares the
+transports it can carry them over, in `capabilities.transports`:
 
 ```yaml
 capabilities:
   transports: "uart console usb wifi ethernet socket rs485 spi i2c"
 ```
 
-The frame is independent of the stream; the planner only needs to know which
-streams both boards can serve. A board says so in `capabilities.links` (and its
-buses in `capabilities.buses`), and the keeper intersects the three sets.
+A board declares what it has in `capabilities.links` and `capabilities.buses`.
+A deployment planner intersects the module's list with both ends of a
+connection, so it offers only transports both boards can serve. `console` is a
+host's byte stream and is offered only when the parent is a host. Adding a
+transport to the module, or a link to a board, makes it selectable without any
+planner change.
+
+## Building
+
+It is a native module: `rho build` adds it as a dependency, and it builds on its
+own with CMake for the host tests.
+
+## Authenticated frames
+
+`robohub/secure.h` authenticates a link: `robohub_transport_secure(transport,
+&secure)` and from then on every frame sent is sealed and every frame received
+must open under the session, or it is dropped. The first send says hello to the
+gateway and returns `ROBOHUB_ERR_STATE` until the session is up, so nothing is
+sent unauthenticated. HMAC-SHA256, truncated to 64 bits, with a counter per
+direction and a session lifetime; no encryption, no allocation. The board's id and
+device key come from its firmware build, and its nonces from
+`robohub_platform_nonce`, which every platform provides.
 
 ## Network transports
 
